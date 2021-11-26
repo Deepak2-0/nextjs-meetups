@@ -1,9 +1,15 @@
+import { MongoClient, ObjectId } from "mongodb";
+import Head from "next/head";
 import MeetupDetail from "../../components/meetups/MeetupDetail";
 
 const MeetupDetails = (props) => {
 	const { imageUrl, title, address, description } = props.meetupData;
 	return (
 		<>
+			<Head>
+				<title>{title}</title>
+				<meta name="description" content={description} />
+			</Head>
 			<MeetupDetail
 				imageUrl={imageUrl}
 				title={title}
@@ -21,44 +27,72 @@ const MeetupDetails = (props) => {
 //if fallback is true, means for a new paths which is not present nextjs will dynamically
 //generate the page on incoming request to server
 export async function getStaticPaths() {
+	const uri = `mongodb+srv://${process.env.MONGODB_USER}:${process.env.MONGODB_PASSWORD}@cluster0.z3i7n.mongodb.net/meetups?retryWrites=true&w=majority`;
+
+	const client = new MongoClient(uri, {
+		useNewUrlParser: true,
+		useUnifiedTopology: true,
+	});
+
+	let meetups = [];
+
+	try {
+		await client.connect();
+		const meetupCollection = client.db().collection("meetups");
+
+		//means only includes _id and no other field values
+		meetups = await meetupCollection.find({}, { _id: 1 }).toArray();
+	} catch (error) {
+		console.log(error);
+	} finally {
+		await client.close();
+	}
+
 	return {
 		fallback: false,
-		paths: [
-			{
-				params: {
-					meetupId: "m1",
-				},
+		paths: meetups.map((meetup) => ({
+			params: {
+				meetupId: meetup._id.toString(),
 			},
-			{
-				params: {
-					meetupId: "m2",
-				},
-			},
-			{
-				params: {
-					meetupId: "m3",
-				},
-			},
-			{
-				params: {
-					meetupId: "m4",
-				},
-			},
-		],
+		})),
 	};
 }
 
 export async function getStaticProps(context) {
 	//fetch api
 	const meetupId = context.params.meetupId;
+
+	const uri = `mongodb+srv://${process.env.MONGODB_USER}:${process.env.MONGODB_PASSWORD}@cluster0.z3i7n.mongodb.net/meetups?retryWrites=true&w=majority`;
+
+	const client = new MongoClient(uri, {
+		useNewUrlParser: true,
+		useUnifiedTopology: true,
+	});
+
+	let selectedMeetup = {};
+
+	try {
+		await client.connect();
+		const meetupCollection = client.db().collection("meetups");
+
+		//means only includes _id and no other field values
+		selectedMeetup = await meetupCollection.findOne({
+			_id: ObjectId(meetupId),
+		});
+	} catch (error) {
+		console.log(error);
+	} finally {
+		await client.close();
+	}
+
 	return {
 		props: {
 			meetupData: {
-				id: meetupId,
-				imageUrl: "https://picsum.photos/200/300",
-				title: "A first meetup",
-				address: "Some street, 1234",
-				description: "Meetup description",
+				id: selectedMeetup._id.toString(),
+				imageUrl: selectedMeetup.image,
+				title: selectedMeetup.title,
+				address: selectedMeetup.address,
+				description: selectedMeetup.description,
 			},
 		},
 	};
